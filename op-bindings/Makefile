@@ -33,7 +33,8 @@ bindings: l1block-bindings \
 	legacy-erc20-eth-bindings \
 	dispute-game-factory-bindings \
 	standard-bridge-bindings \
-	cross-domain-messenger-bindings
+	cross-domain-messenger-bindings \
+	l2-delegate-bridge-bindings
 
 version:
 	forge --version
@@ -133,6 +134,9 @@ standard-bridge-bindings: compile
 
 cross-domain-messenger-bindings: compile
 	./gen_bindings.sh contracts/universal/CrossDomainMessenger.sol:CrossDomainMessenger $(pkg)
+
+l2-delegate-bridge-bindings: compile
+	./gen_bindings.sh contracts/L2/L2DelegateBridge.sol:L2DelegateBridge $(pkg)
 
 more:
 	go run ./gen/main.go \
