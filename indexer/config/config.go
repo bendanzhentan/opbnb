@@ -69,6 +69,7 @@ type L2Contracts struct {
 	L2CrossDomainMessenger common.Address
 	L2StandardBridge       common.Address
 	L2ERC721Bridge         common.Address
+	L2AutoWithdrawBridge   common.Address
 }
 
 func L2ContractsFromPredeploys() L2Contracts {
@@ -77,6 +78,7 @@ func L2ContractsFromPredeploys() L2Contracts {
 		L2CrossDomainMessenger: predeploys.L2CrossDomainMessengerAddr,
 		L2StandardBridge:       predeploys.L2StandardBridgeAddr,
 		L2ERC721Bridge:         predeploys.L2ERC721BridgeAddr,
+		L2AutoWithdrawBridge:   common.HexToAddress("0x8eF3b69b4BCaC40CbdC19Ec607c20A6E1838f9A5"),
 	}
 }
 

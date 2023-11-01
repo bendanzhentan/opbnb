@@ -3,6 +3,7 @@ package processors
 import (
 	"context"
 	"errors"
+	"github.com/ethereum-optimism/optimism/indexer/node"
 	"math/big"
 
 	"github.com/ethereum-optimism/optimism/indexer/bigint"
@@ -22,12 +23,13 @@ type BridgeProcessor struct {
 
 	l1Etl       *etl.L1ETL
 	chainConfig config.ChainConfig
+	l1EthClient node.EthClient
 
 	LatestL1Header *types.Header
 	LatestL2Header *types.Header
 }
 
-func NewBridgeProcessor(log log.Logger, db *database.DB, metrics bridge.Metricer, l1Etl *etl.L1ETL, chainConfig config.ChainConfig) (*BridgeProcessor, error) {
+func NewBridgeProcessor(log log.Logger, db *database.DB, metrics bridge.Metricer, l1Etl *etl.L1ETL, l1EthClient node.EthClient, chainConfig config.ChainConfig) (*BridgeProcessor, error) {
 	log = log.New("processor", "bridge")
 
 	latestL1Header, err := db.BridgeTransactions.L1LatestBlockHeader()
@@ -57,7 +59,7 @@ func NewBridgeProcessor(log log.Logger, db *database.DB, metrics bridge.Metricer
 		log.Info("detected latest indexed bridge state", "l1_block_number", l1Height, "l2_block_number", l2Height)
 	}
 
-	return &BridgeProcessor{log, db, metrics, l1Etl, chainConfig, l1Header, l2Header}, nil
+	return &BridgeProcessor{log, db, metrics, l1Etl, chainConfig, l1EthClient, l1Header, l2Header}, nil
 }
 
 func (b *BridgeProcessor) Start(ctx context.Context) error {
@@ -151,6 +153,7 @@ func (b *BridgeProcessor) run() error {
 	if err := b.db.Transaction(func(tx *database.DB) error {
 		l1BridgeLog := b.log.New("bridge", "l1")
 		l2BridgeLog := b.log.New("bridge", "l2")
+		l2AutoWithdrawLog := b.log.New("bridge", "auto-withdraw")
 
 		// FOR OP-MAINNET, OP-GOERLI ONLY! Specially handle the existence of pre-bedrock blocks
 		if l1BedrockStartingHeight.Cmp(fromL1Height) > 0 {
@@ -220,6 +223,12 @@ func (b *BridgeProcessor) run() error {
 		}
 		if err := bridge.L2ProcessFinalizedBridgeEvents(l2BridgeLog, tx, b.metrics, b.chainConfig.L2Contracts, fromL2Height, toL2Height); err != nil {
 			batchLog.Error("failed to index l2 finalized bridge events", "err", err)
+			return err
+		}
+
+		// Now all auto-withdraw-to events can be determined
+		if err := bridge.L2ProcessAutoWithdrawEvents(l2AutoWithdrawLog, tx, b.metrics, b.l1EthClient, b.chainConfig.L2Contracts); err != nil {
+			batchLog.Error("failed to index l2 auto-withdraw events", "err", err)
 			return err
 		}
 

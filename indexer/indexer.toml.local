@@ -21,11 +21,11 @@ l1-rpc = "https://bsc-testnet.nodereal.io/v1/32308abe6eda446995927479cca09399"
 l2-rpc = "https://opbnb-testnet-rpc.bnbchain.org"
 
 [db]
-host = "$INDEXER_DB_HOST"
-port = $INDEXER_DB_PORT
-user = "$INDEXER_DB_USER"
-password = "$INDEXER_DB_PASS"
-name = "$INDEXER_DB_NAME"
+host = "0.0.0.0"
+port = 5434
+user = "db_username"
+password = "db_password"
+name = "db_name"
 
 [http]
 host = "127.0.0.1"

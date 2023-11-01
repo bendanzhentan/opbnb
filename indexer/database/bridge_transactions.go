@@ -43,6 +43,8 @@ type L2TransactionWithdrawal struct {
 	FinalizedL1EventGUID *uuid.UUID
 	Succeeded            *bool
 
+	IsAutoWithdrawal *bool
+
 	Tx       Transaction `gorm:"embedded"`
 	GasLimit *big.Int    `gorm:"serializer:u256"`
 }
@@ -53,6 +55,7 @@ type BridgeTransactionsView interface {
 
 	L2TransactionWithdrawal(common.Hash) (*L2TransactionWithdrawal, error)
 	L2LatestBlockHeader() (*L2BlockHeader, error)
+	L2TransactionWithdrawalsFilter(_limit *int) ([]L2TransactionWithdrawal, error)
 }
 
 type BridgeTransactionsDB interface {
@@ -63,6 +66,7 @@ type BridgeTransactionsDB interface {
 	StoreL2TransactionWithdrawals([]L2TransactionWithdrawal) error
 	MarkL2TransactionWithdrawalProvenEvent(common.Hash, uuid.UUID) error
 	MarkL2TransactionWithdrawalFinalizedEvent(common.Hash, uuid.UUID, bool) error
+	MarkL2TransactionWithdrawalIsAutoWithdraw(common.Hash, bool) error
 }
 
 /**
@@ -163,6 +167,28 @@ func (db *bridgeTransactionsDB) L2TransactionWithdrawal(withdrawalHash common.Ha
 	return &withdrawal, nil
 }
 
+func (db *bridgeTransactionsDB) L2TransactionWithdrawalsFilter(limit *int) ([]L2TransactionWithdrawal, error) {
+	query := db.gorm.Table("l2_transaction_withdrawals").Where(
+		"is_auto_withdraw IS NULL",
+	).Order("initiated_l2_event_guid ASC").Select("l2_transaction_withdrawals.*")
+
+	if limit != nil {
+		query = query.Limit(*limit)
+	}
+
+	var withdrawals []L2TransactionWithdrawal
+	result := query.Find(&withdrawals)
+
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, result.Error
+	}
+
+	return withdrawals, nil
+}
+
 // MarkL2TransactionWithdrawalProvenEvent links a withdrawn transaction with associated Prove action on L1.
 func (db *bridgeTransactionsDB) MarkL2TransactionWithdrawalProvenEvent(withdrawalHash common.Hash, provenL1EventGuid uuid.UUID) error {
 	withdrawal, err := db.L2TransactionWithdrawal(withdrawalHash)
@@ -202,6 +228,19 @@ func (db *bridgeTransactionsDB) MarkL2TransactionWithdrawalFinalizedEvent(withdr
 
 	withdrawal.FinalizedL1EventGUID = &finalizedL1EventGuid
 	withdrawal.Succeeded = &succeeded
+	result := db.gorm.Save(&withdrawal)
+	return result.Error
+}
+
+func (db *bridgeTransactionsDB) MarkL2TransactionWithdrawalIsAutoWithdraw(withdrawalHash common.Hash, isAutoWithdrawal bool) error {
+	withdrawal, err := db.L2TransactionWithdrawal(withdrawalHash)
+	if err != nil {
+		return err
+	} else if withdrawal == nil {
+		return fmt.Errorf("transaction withdrawal hash %s not found", withdrawalHash)
+	}
+
+	withdrawal.IsAutoWithdrawal = &isAutoWithdrawal
 	result := db.gorm.Save(&withdrawal)
 	return result.Error
 }
