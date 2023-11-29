@@ -17,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 
+	"github.com/ethereum-optimism/optimism/op-service/bsc"
 	"github.com/ethereum-optimism/optimism/op-service/retry"
 	"github.com/ethereum-optimism/optimism/op-service/txmgr/metrics"
 )
@@ -223,14 +224,14 @@ func (m *SimpleTxManager) craftTx(ctx context.Context, candidate TxCandidate) (*
 		rawTx.Gas = candidate.GasLimit
 	} else {
 		// Calculate the intrinsic gas for the transaction
-		gas, err := m.backend.EstimateGas(ctx, ethereum.CallMsg{
+		gas, err := m.backend.EstimateGas(ctx, bsc.ToLegacyCallMsg(ethereum.CallMsg{
 			From:      m.cfg.From,
 			To:        candidate.To,
 			GasFeeCap: gasFeeCap,
 			GasTipCap: gasTipCap,
 			Data:      rawTx.Data,
 			Value:     rawTx.Value,
-		})
+		}))
 		if err != nil {
 			return nil, fmt.Errorf("failed to estimate gas: %w", err)
 		}
@@ -264,9 +265,10 @@ func (m *SimpleTxManager) signWithNextNonce(ctx context.Context, rawTx *types.Dy
 	}
 
 	rawTx.Nonce = *m.nonce
+	legacyTx := bsc.ToLegacyTx(rawTx)
 	ctx, cancel := context.WithTimeout(ctx, m.cfg.NetworkTimeout)
 	defer cancel()
-	tx, err := m.cfg.Signer(ctx, m.cfg.From, types.NewTx(rawTx))
+	tx, err := m.cfg.Signer(ctx, m.cfg.From, types.NewTx(legacyTx))
 	if err != nil {
 		// decrement the nonce, so we can retry signing with the same nonce next time
 		// signWithNextNonce is called
@@ -552,9 +554,11 @@ func (m *SimpleTxManager) increaseGasPrice(ctx context.Context, tx *types.Transa
 	}
 	rawTx.Gas = gas
 
+	legacyTx := bsc.ToLegacyTx(rawTx)
+
 	ctx, cancel := context.WithTimeout(ctx, m.cfg.NetworkTimeout)
 	defer cancel()
-	newTx, err := m.cfg.Signer(ctx, m.cfg.From, types.NewTx(rawTx))
+	newTx, err := m.cfg.Signer(ctx, m.cfg.From, types.NewTx(legacyTx))
 	if err != nil {
 		m.l.Warn("failed to sign new transaction", "err", err)
 		return tx, nil
